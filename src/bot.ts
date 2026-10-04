@@ -14,6 +14,12 @@ export interface BotDeps {
 
 const HTML = { parse_mode: "HTML" as const, link_preview_options: { is_disabled: true } };
 
+/** "12" or "#12" -> 12; anything else (including empty) -> undefined. */
+function parseId(s: string): number | undefined {
+  const m = /^#?(\d+)$/.exec(s.trim());
+  return m ? Number(m[1]) : undefined;
+}
+
 export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe) {
   const { store } = deps;
   const t = strings(deps.lang);
@@ -110,14 +116,14 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
     ),
   );
   admin.command("revoke", (ctx) => {
-    const id = Number(arg(ctx));
-    if (!Number.isInteger(id)) return ctx.reply(t.needId);
+    const id = parseId(arg(ctx));
+    if (id === undefined) return ctx.reply(t.needId);
     if (id === ctx.from!.id) return ctx.reply(t.cannotRevokeSelf);
     return ctx.reply(store.revoke(id) ? t.revoked(id) : t.notFound);
   });
   admin.command("promote", (ctx) => {
-    const id = Number(arg(ctx));
-    if (!Number.isInteger(id)) return ctx.reply(t.needId);
+    const id = parseId(arg(ctx));
+    if (id === undefined) return ctx.reply(t.needId);
     return ctx.reply(store.promote(id) ? t.promoted(id) : t.notFound);
   });
   admin.command("export", (ctx) => {
@@ -166,8 +172,8 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
   ];
   for (const [name, apply] of idCommands) {
     pool.command(name, async (ctx) => {
-      const id = Number(arg(ctx).replace(/^#/, ""));
-      if (!Number.isInteger(id)) return ctx.reply(t.needId);
+      const id = parseId(arg(ctx));
+      if (id === undefined) return ctx.reply(t.needId);
       const e = apply(ctx.chat.id, id) ? store.get(ctx.chat.id, id) : undefined;
       return e ? replyEntry(ctx, e) : ctx.reply(t.noEntry(id));
     });
@@ -175,9 +181,9 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
 
   pool.command("tag", async (ctx) => {
     const [first = "", ...rest] = arg(ctx).split(/\s+/);
-    const id = Number(first.replace(/^#/, ""));
+    const id = parseId(first);
     const parsed = parseMessage(rest.join(" "));
-    if (!Number.isInteger(id) || !parsed.ok || (!parsed.tags.length && parsed.priority === null)) {
+    if (id === undefined || !parsed.ok || (!parsed.tags.length && parsed.priority === null)) {
       return ctx.reply(parsed.ok ? t.tagUsage : t.conflictingPriority, HTML);
     }
     const e = store.addTags(ctx.chat.id, id, parsed.tags, parsed.priority);
