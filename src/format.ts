@@ -1,3 +1,4 @@
+import { ICONS } from "./attachment.js";
 import { esc } from "./i18n/index.js";
 import type { Entry } from "./store.js";
 
@@ -24,6 +25,12 @@ export function entryLine(e: Entry): string {
   parts.push(`${e.status === "done" ? "✅ " : ""}<b>#${e.id}</b>${labels.length ? " " + esc(labels.join(" ")) : ""}`);
 
   const body: string[] = [];
+  const a = e.attachment;
+  if (a?.kind === "location") {
+    body.push(`<a href="https://www.google.com/maps?q=${a.latitude},${a.longitude}">${ICONS.location} location</a>`);
+  } else if (a) {
+    body.push(`${ICONS[a.kind]}${a.name ? " " + esc(a.name) : ""}`);
+  }
   for (const link of e.links) {
     body.push(`<a href="${esc(link).replace(/"/g, "&quot;")}">${esc(e.titles[link] || host(link))}</a>`);
   }
@@ -57,7 +64,7 @@ function csvField(v: string | number): string {
 }
 
 export function toCsv(entries: Entry[]): string {
-  const rows = [["id", "status", "deleted", "priority", "tags", "author", "created_at", "links", "text"]];
+  const rows = [["id", "status", "deleted", "priority", "tags", "author", "created_at", "attachment", "links", "text"]];
   for (const e of entries) {
     rows.push([
       String(e.id),
@@ -67,6 +74,7 @@ export function toCsv(entries: Entry[]): string {
       e.tags.join(" "),
       e.authorName,
       new Date(e.createdAt * 1000).toISOString(),
+      e.attachment ? e.attachment.name ? `${e.attachment.kind}:${e.attachment.name}` : e.attachment.kind : "",
       e.links.join(" "),
       e.text,
     ]);

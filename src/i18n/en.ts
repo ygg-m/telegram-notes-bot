@@ -3,7 +3,7 @@
 export const en = {
   help: [
     "<b>Notes bot</b>",
-    "Send any message, optionally with #tags. <code>#prio1</code>–<code>#prio9</code> sets priority (1 = most urgent).",
+    "Send any message, photo, video, file, voice note or location (put #tags in the caption). <code>#prio1</code>–<code>#prio9</code> sets priority (1 = most urgent).",
     "",
     "/list [#tags] – open entries matching all tags (<code>#untagged</code> for tagless ones)",
     "/all [#tags] – include done entries",
@@ -11,6 +11,7 @@ export const en = {
     "/tags – tags with counts",
     "/done &lt;id&gt; · /reopen &lt;id&gt; · /del &lt;id&gt;",
     "/tag &lt;id&gt; #tag [#prio2] – add tags to an entry",
+    "/get &lt;id&gt; – send an entry's photo/file again",
     "/join &lt;code&gt; – join using an invite",
     "/whoami – show your Telegram id",
     "",
@@ -38,6 +39,7 @@ export const en = {
   conflictingPriority: "Only one #prio tag is allowed per entry – nothing saved.",
   empty: "Nothing here.",
   noTags: "No tags yet.",
+  noAttachment: (id: number) => `Entry #${id} has no attachment.`,
   tagUsage: "Usage: /tag &lt;id&gt; #tag [#prio2]",
   searchUsage: "Usage: /search &lt;text&gt;",
   saved: "Saved",

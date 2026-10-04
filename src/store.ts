@@ -3,6 +3,17 @@ import { randomBytes } from "node:crypto";
 
 export type Status = "open" | "done";
 
+export type AttachmentKind = "photo" | "video" | "document" | "audio" | "voice" | "location";
+
+/** A Telegram attachment, referenced by file id (the file itself stays on Telegram). */
+export interface Attachment {
+  kind: AttachmentKind;
+  fileId?: string;
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface Entry {
   chatId: number;
   id: number;
@@ -13,6 +24,7 @@ export interface Entry {
   priority: number | null;
   links: string[];
   titles: Record<string, string>;
+  attachment: Attachment | null;
   status: Status;
   deleted: boolean;
   messageId: number | null;
@@ -28,6 +40,7 @@ export interface NewEntry {
   priority: number | null;
   links?: string[];
   titles?: Record<string, string>;
+  attachment?: Attachment;
   messageId?: number;
 }
 
@@ -54,6 +67,7 @@ interface EntryRow {
   priority: number | null;
   links: string;
   titles: string;
+  attachment: string | null;
   status: Status;
   deleted: number;
   message_id: number | null;
@@ -86,6 +100,7 @@ CREATE TABLE IF NOT EXISTS entries (
   priority INTEGER,
   links TEXT NOT NULL DEFAULT '[]',
   titles TEXT NOT NULL DEFAULT '{}',
+  attachment TEXT,
   status TEXT NOT NULL DEFAULT 'open',
   deleted INTEGER NOT NULL DEFAULT 0,
   message_id INTEGER,
@@ -110,6 +125,8 @@ export class Store {
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(SCHEMA);
+    const columns = this.db.prepare("PRAGMA table_info(entries)").all() as { name: string }[];
+    if (!columns.some((c) => c.name === "attachment")) this.db.exec("ALTER TABLE entries ADD COLUMN attachment TEXT");
   }
 
   close() {
@@ -220,8 +237,8 @@ export class Store {
       ).n;
       this.db
         .prepare(
-          `INSERT INTO entries (chat_id, id, author_id, author_name, text, priority, links, titles, message_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO entries (chat_id, id, author_id, author_name, text, priority, links, titles, attachment, message_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           e.chatId,
@@ -232,6 +249,7 @@ export class Store {
           e.priority,
           JSON.stringify(e.links ?? []),
           JSON.stringify(e.titles ?? {}),
+          e.attachment ? JSON.stringify(e.attachment) : null,
           e.messageId ?? null,
           nowSeconds(),
         );
@@ -353,6 +371,7 @@ export class Store {
       priority: r.priority,
       links: JSON.parse(r.links) as string[],
       titles: JSON.parse(r.titles) as Record<string, string>,
+      attachment: r.attachment ? (JSON.parse(r.attachment) as Attachment) : null,
       status: r.status,
       deleted: !!r.deleted,
       messageId: r.message_id,

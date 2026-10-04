@@ -5,6 +5,7 @@ Shared note-saving bot for a small Telegram group. Send `#buy #home #prio1 <link
 ## Using it
 
 - Every plain message in an enabled group becomes an entry. `#tags` can be anywhere; `#prio1`–`#prio9` sets priority (1 = most urgent); no tags means "untagged".
+- Photos, videos, files, audio, voice notes and locations are saved too; put the `#tags` in the caption. Only Telegram's reference to the file is stored (nothing is downloaded), and `/get <id>` sends it back.
 - `/list [#tags]` (all tags must match, `#untagged` for tagless), `/all`, `/search`, `/tags`, `/done`, `/reopen`, `/del`, `/tag <id> #x`, `/help`.
 - Admin: `/enable` / `/disable` (run in the group), `/invite`, `/users`, `/revoke <id>`, `/promote <id>`, `/export` (CSV).
 - New person: the admin sends `/invite`; they send `/join <code>` to the bot (DM or group).

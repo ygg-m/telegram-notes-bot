@@ -12,6 +12,7 @@ const e = (over: Partial<Entry> = {}): Entry => ({
   priority: 1,
   links: ["https://shop.example/p/1"],
   titles: { "https://shop.example/p/1": "Lamp <3" },
+  attachment: null,
   status: "open",
   deleted: false,
   messageId: 1,
@@ -54,7 +55,7 @@ describe("toCsv", () => {
   it("quotes fields containing commas, quotes and newlines", () => {
     const csv = toCsv([e({ text: 'say "hi", ok\nnow' })]);
     const [header, row] = csv.split("\n", 2) as [string, string];
-    expect(header).toBe("id,status,deleted,priority,tags,author,created_at,links,text");
+    expect(header).toBe("id,status,deleted,priority,tags,author,created_at,attachment,links,text");
     expect(row.startsWith("7,open,0,1,buy home,Ana,")).toBe(true);
     expect(csv).toContain('"say ""hi"", ok\nnow"');
   });

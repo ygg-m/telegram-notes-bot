@@ -12,6 +12,10 @@ _Avoid_: Workspace, board, list
 One saved message in a pool: its text, links, tags, status and author.
 _Avoid_: Note, item, post
 
+**Attachment**:
+A photo, video, file, audio, voice note or location sent as an entry. Its tags come from the caption.
+_Avoid_: Media, upload
+
 **Tag**:
 A flat, case-insensitive label written as `#word` in a message. An entry has any number of them.
 _Avoid_: Category, sub-category, label

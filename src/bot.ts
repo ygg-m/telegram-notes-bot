@@ -1,5 +1,6 @@
 import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
-import type { UserFromGetMe } from "grammy/types";
+import type { Message, UserFromGetMe } from "grammy/types";
+import { MEDIA_FILTERS, extractAttachment } from "./attachment.js";
 import { chunkLines, entryLine, toCsv } from "./format.js";
 import { strings } from "./i18n/index.js";
 import { parseMessage } from "./parse.js";
@@ -212,17 +213,80 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
     }
   });
 
+  // sending an attachment back
+  pool.command("get", async (ctx) => {
+    const id = parseId(arg(ctx));
+    if (id === undefined) return ctx.reply(t.needId);
+    const e = store.get(ctx.chat.id, id);
+    if (!e || e.deleted) return ctx.reply(t.noEntry(id));
+    const a = e.attachment;
+    if (!a) return ctx.reply(t.noAttachment(id));
+    const opts = { caption: entryLine(e), parse_mode: "HTML" as const };
+    if (a.kind === "location") {
+      await ctx.replyWithLocation(a.latitude!, a.longitude!);
+      return ctx.reply(entryLine(e), HTML);
+    }
+    const file = a.fileId!;
+    if (a.kind === "photo") return ctx.replyWithPhoto(file, opts);
+    if (a.kind === "video") return ctx.replyWithVideo(file, opts);
+    if (a.kind === "audio") return ctx.replyWithAudio(file, opts);
+    if (a.kind === "voice") return ctx.replyWithVoice(file, opts);
+    return ctx.replyWithDocument(file, opts);
+  });
+
   // saving entries
   const isCommand = (ctx: Context) =>
     !!ctx.message?.entities?.some((en) => en.type === "bot_command" && en.offset === 0);
 
-  pool.on("message:text", async (ctx) => {
-    if (isCommand(ctx)) return;
-    const text = ctx.message.text;
+  async function saveEntry(ctx: Context, message: Message, text: string) {
+    const replyTo = { reply_parameters: { message_id: message.message_id } };
     const parsed = parseMessage(text);
-    if (!parsed.ok) return ctx.reply(t.conflictingPriority, { reply_parameters: { message_id: ctx.message.message_id } });
+    if (!parsed.ok) return ctx.reply(t.conflictingPriority, replyTo);
 
     const entry = store.addEntry({
+      chatId: ctx.chat!.id,
+      authorId: ctx.from!.id,
+      authorName: displayName(ctx),
+      text,
+      tags: parsed.tags,
+      priority: parsed.priority,
+      links: parsed.links,
+      attachment: extractAttachment(message),
+      messageId: message.message_id,
+    });
+    const { text: line, markup } = render(entry);
+    const sent = await ctx.reply(`${t.saved} ${line}`, { ...HTML, reply_markup: markup, ...replyTo });
+
+    if (parsed.links.length) {
+      const titles = await resolveTitles(parsed.links);
+      if (Object.keys(titles).length) {
+        store.updateByMessage({ ...entry, attachment: undefined, titles, messageId: message.message_id });
+        const r = render(store.get(entry.chatId, entry.id)!);
+        await ctx.api
+          .editMessageText(ctx.chat!.id, sent.message_id, `${t.saved} ${r.text}`, { ...HTML, reply_markup: r.markup })
+          .catch(() => {});
+      }
+    }
+  }
+
+  pool.on("message:text", async (ctx) => {
+    if (isCommand(ctx)) return;
+    await saveEntry(ctx, ctx.message, ctx.message.text);
+  });
+
+  // the caption of a photo/video/file carries the tags
+  pool.on(MEDIA_FILTERS, async (ctx) => {
+    await saveEntry(ctx, ctx.message!, ctx.message!.caption ?? "");
+  });
+
+  pool.on(["edited_message:text", "edited_message:caption"], async (ctx) => {
+    const message = ctx.editedMessage;
+    const text = message.text ?? message.caption ?? "";
+    const parsed = parseMessage(text);
+    if (!parsed.ok) return ctx.reply(t.conflictingPriority, { reply_parameters: { message_id: message.message_id } });
+    const existing = store.list(ctx.chat.id, { includeDone: true }).find((e) => e.messageId === message.message_id);
+    const titles = await resolveTitles(parsed.links, existing?.titles);
+    const updated = store.updateByMessage({
       chatId: ctx.chat.id,
       authorId: ctx.from.id,
       authorName: displayName(ctx),
@@ -230,50 +294,14 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
       tags: parsed.tags,
       priority: parsed.priority,
       links: parsed.links,
-      messageId: ctx.message.message_id,
-    });
-    const { text: line, markup } = render(entry);
-    const sent = await ctx.reply(`${t.saved} ${line}`, {
-      ...HTML,
-      reply_markup: markup,
-      reply_parameters: { message_id: ctx.message.message_id },
-    });
-
-    if (parsed.links.length) {
-      const titles = await resolveTitles(parsed.links);
-      if (Object.keys(titles).length) {
-        store.updateByMessage({ ...entry, titles, messageId: ctx.message.message_id });
-        const fresh = store.get(entry.chatId, entry.id)!;
-        const r = render(fresh);
-        await ctx.api
-          .editMessageText(ctx.chat.id, sent.message_id, `${t.saved} ${r.text}`, { ...HTML, reply_markup: r.markup })
-          .catch(() => {});
-      }
-    }
-  });
-
-  pool.on("edited_message:text", async (ctx) => {
-    const parsed = parseMessage(ctx.editedMessage.text);
-    if (!parsed.ok) return ctx.reply(t.conflictingPriority, { reply_parameters: { message_id: ctx.editedMessage.message_id } });
-    const messageId = ctx.editedMessage.message_id;
-    const existing = store.list(ctx.chat.id, { includeDone: true }).find((e) => e.messageId === messageId);
-    const titles = await resolveTitles(parsed.links, existing?.titles);
-    const updated = store.updateByMessage({
-      chatId: ctx.chat.id,
-      authorId: ctx.from.id,
-      authorName: displayName(ctx),
-      text: ctx.editedMessage.text,
-      tags: parsed.tags,
-      priority: parsed.priority,
-      links: parsed.links,
       titles,
-      messageId,
+      messageId: message.message_id,
     });
     if (updated) await replyEntry(ctx, updated, `${t.updated} `);
   });
 
   // members talking to the bot where nothing is saved: say why instead of staying silent
-  bot.on("message:text", (ctx) => {
+  bot.on(["message:text", ...MEDIA_FILTERS], (ctx) => {
     if (inPool(ctx)) return;
     return ctx.reply(isGroup(ctx) ? t.groupNotEnabled : t.useInGroup);
   });
