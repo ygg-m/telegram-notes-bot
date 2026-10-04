@@ -196,6 +196,15 @@ export class Store {
     this.db.prepare("UPDATE groups SET enabled = 0 WHERE chat_id = ?").run(chatId);
   }
 
+  /** Telegram gives a group a new id when it is upgraded to a supergroup; carry its pool over. */
+  migrateChat(oldId: number, newId: number) {
+    this.db.transaction(() => {
+      for (const table of ["groups", "entries", "entry_tags"]) {
+        this.db.prepare(`UPDATE ${table} SET chat_id = ? WHERE chat_id = ?`).run(newId, oldId);
+      }
+    })();
+  }
+
   isGroupEnabled(chatId: number): boolean {
     return !!this.db.prepare("SELECT 1 FROM groups WHERE chat_id = ? AND enabled = 1").get(chatId);
   }

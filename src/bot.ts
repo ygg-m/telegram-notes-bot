@@ -76,6 +76,10 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
     return ctx.reply(t.joinFailed);
   });
 
+  bot.on("message:migrate_to_chat_id", (ctx) => {
+    store.migrateChat(ctx.chat.id, ctx.message.migrate_to_chat_id);
+  });
+
   // --- everything below requires membership --------------------------------
 
   bot.use(async (ctx, next) => {
@@ -260,6 +264,12 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
       messageId,
     });
     if (updated) await replyEntry(ctx, updated, `${t.updated} `);
+  });
+
+  // members talking to the bot where nothing is saved: say why instead of staying silent
+  bot.on("message:text", (ctx) => {
+    if (inPool(ctx)) return;
+    return ctx.reply(isGroup(ctx) ? t.groupNotEnabled : t.useInGroup);
   });
 
   bot.catch((err) => console.error("bot error:", err.error));

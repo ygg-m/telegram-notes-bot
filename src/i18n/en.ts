@@ -24,6 +24,8 @@ export const en = {
     `Invite code (valid 24h, single use): <code>${code}</code>\nThe new person sends <code>/join ${code}</code> to me.`,
   groupEnabled: "This group is now enabled. Send me your notes!",
   groupDisabled: "This group is disabled. Existing entries are kept.",
+  groupNotEnabled: "This group isn't enabled yet. An admin can send /enable here.",
+  useInGroup: "Entries are saved in groups. Add me to a group and send /enable there (admins only).",
   groupOnly: "Use this command in a group.",
   users: (rows: { id: number; name: string; admin: boolean }[]) =>
     rows.map((r) => `<code>${r.id}</code> ${esc(r.name)}${r.admin ? " (admin)" : ""}`).join("\n") || "No members.",

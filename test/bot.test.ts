@@ -65,8 +65,27 @@ describe("bot", () => {
     expect(sent()[1]).toContain("invalid");
   });
 
-  it("requires the group to be enabled", async () => {
+  it("explains where entries are saved instead of staying silent", async () => {
+    await say(ADMIN, "#buy lamp", ADMIN, "private");
+    expect(sent().at(-1)).toContain("Add me to a group");
+    await say(ADMIN, "/list");
+    expect(sent().at(-1)).toContain("isn't enabled");
+    expect(store.list(GROUP, {})).toHaveLength(0);
+  });
+
+  it("carries the pool over when the group becomes a supergroup", async () => {
+    await say(ADMIN, "/enable");
     await say(ADMIN, "#buy lamp");
+    await bot.handleUpdate({
+      update_id: ++update,
+      message: { message_id: ++msgId, date: 0, chat: { id: GROUP, type: "group" }, migrate_to_chat_id: -2002 },
+    } as any);
+    expect(store.isGroupEnabled(-2002)).toBe(true);
+    expect(store.list(-2002, {})).toHaveLength(1);
+  });
+
+  it("requires the group to be enabled", async () => {
+    await say(STRANGER, "#buy lamp");
     expect(calls).toHaveLength(0);
     await say(ADMIN, "/enable");
     expect(sent()[0]).toContain("enabled");
